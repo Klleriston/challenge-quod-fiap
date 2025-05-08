@@ -1,6 +1,5 @@
 package com.fiap.challengefiapquod.domain.service;
 
-import com.fiap.challengefiapquod.domain.model.FingerprintRecord;
 import com.fiap.challengefiapquod.domain.repository.FingerprintRepository;
 import jakarta.annotation.PostConstruct;
 import org.opencv.core.*;
@@ -12,7 +11,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
-import java.security.MessageDigest;
 import java.util.*;
 
 @Service
@@ -30,61 +28,6 @@ public class FingerprintService {
 
     @PostConstruct
     public void init() {
-    }
-
-    public FingerprintRecord registerFingerprint(String userId, String imageUrl) {
-        try {
-            if (imageUrl == null || imageUrl.trim().isEmpty()) {
-                throw new IllegalArgumentException("A URL da imagem não pode estar vazia");
-            }
-
-            boolean isValidFingerprint = imageUrl.toLowerCase().contains("fingerprint") ||
-                    imageUrl.toLowerCase().contains("digital") ||
-                    imageUrl.toLowerCase().contains("biometric");
-
-            if (!isValidFingerprint) {
-                throw new IllegalArgumentException("A imagem fornecida não parece ser uma impressão digital válida");
-            }
-
-            String mockHash = UUID.randomUUID().toString();
-
-            FingerprintRecord record = new FingerprintRecord();
-            record.setId(UUID.randomUUID().toString());
-            record.setUserId(userId);
-            record.setImageUrl(imageUrl);
-            record.setFingerprintHash(mockHash);
-            record.setRegistrationDate(new Date());
-
-            return fingerprintRepository.save(record);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao registrar impressão digital: " + e.getMessage(), e);
-        }
-    }
-
-    public boolean verifyFingerprint(String userId, String imageUrl) {
-        try {
-            if (fingerprintRepository.existsByImageUrl(imageUrl)) {
-                return true;
-            }
-
-            byte[] imageData = downloadImage(imageUrl);
-
-            if (!isValidFingerprintImage(imageData)) {
-                return false;
-            }
-
-            String fingerprintHash = generateFingerprintHash(imageData);
-
-            Optional<FingerprintRecord> record = fingerprintRepository.findByUserId(userId);
-
-            if (record.isEmpty()) return false;
-
-            return record.get().getFingerprintHash().equals(fingerprintHash);
-
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     public byte[] downloadImage(String imageUrl) throws Exception {
@@ -184,70 +127,4 @@ public class FingerprintService {
         return squaredDifferenceSum / values.length;
     }
 
-    private String generateFingerprintHash(byte[] imageData) {
-        try {
-            Mat image = Imgcodecs.imdecode(new MatOfByte(imageData), Imgcodecs.IMREAD_GRAYSCALE);
-
-            Mat resizedImage = new Mat();
-            Imgproc.resize(image, resizedImage, new Size(200, 200));
-
-            Map<String, Object> features = extractSimpleFeatures(resizedImage);
-
-            String featuresStr = features.toString();
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(featuresStr.getBytes());
-
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hashBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-
-            return hexString.toString();
-
-        } catch (Exception e) {
-            throw new RuntimeException("Erro ao gerar hash da impressão digital", e);
-        }
-    }
-
-    private Map<String, Object> extractSimpleFeatures(Mat image) {
-        Map<String, Object> features = new HashMap<>();
-
-        int regionsX = 5, regionsY = 5;
-        int regionWidth = image.cols() / regionsX;
-        int regionHeight = image.rows() / regionsY;
-
-        for (int y = 0; y < regionsY; y++) {
-            for (int x = 0; x < regionsX; x++) {
-                Rect region = new Rect(
-                        x * regionWidth,
-                        y * regionHeight,
-                        regionWidth,
-                        regionHeight
-                );
-
-                Mat regionMat = new Mat(image, region);
-                MatOfDouble mean = new MatOfDouble();
-                MatOfDouble stdDev = new MatOfDouble();
-                Core.meanStdDev(regionMat, mean, stdDev);
-
-                String key = "region_" + x + "_" + y;
-                double[] meanVal = mean.toArray();
-                double[] stdDevVal = stdDev.toArray();
-
-                features.put(key + "_mean", Math.round(meanVal[0] * 100) / 100.0);
-                features.put(key + "_stddev", Math.round(stdDevVal[0] * 100) / 100.0);
-            }
-        }
-
-        MatOfDouble globalMean = new MatOfDouble();
-        MatOfDouble globalStdDev = new MatOfDouble();
-        Core.meanStdDev(image, globalMean, globalStdDev);
-
-        features.put("global_mean", Math.round(globalMean.toArray()[0] * 100) / 100.0);
-        features.put("global_stddev", Math.round(globalStdDev.toArray()[0] * 100) / 100.0);
-
-        return features;
-    }
 }

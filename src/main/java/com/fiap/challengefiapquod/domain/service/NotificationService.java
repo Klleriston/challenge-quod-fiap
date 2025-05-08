@@ -1,44 +1,65 @@
 package com.fiap.challengefiapquod.domain.service;
 
+import com.fiap.challengefiapquod.domain.model.NotificacaoFraude;
+import com.fiap.challengefiapquod.domain.repository.NotificationFraudRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.util.*;
 
 @Service
+@RequiredArgsConstructor
 public class NotificationService {
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final NotificationFraudRepository notificationFraudRepository;
 
-    public boolean notifyFraudDetection(String userId, String imageUrl, String reason) {
+    public String notificarFraude(String tipoBiometria, String tipoFraude, Map<String, Object> metadados) {
         try {
-            String notificationEndpoint = "https://api.fraudmonitoring.example/notify";
+            String transactionId = UUID.randomUUID().toString();
 
-            Map<String, Object> notificationData = new HashMap<>();
-            notificationData.put("userId", userId);
-            notificationData.put("imageUrl", imageUrl);
-            notificationData.put("detectionTime", System.currentTimeMillis());
-            notificationData.put("reason", reason);
-            notificationData.put("severity", "HIGH");
+            NotificacaoFraude.DispositivoInfo dispositivo = NotificacaoFraude.DispositivoInfo.builder()
+                    .fabricante("Desconhecido")
+                    .modelo("Desconhecido")
+                    .sistemaOperacional("Desconhecido")
+                    .build();
 
-            System.out.println("FRAUDE DETECTADA: " + reason + " para usuário " + userId + ", imagem: " + imageUrl);
+            List<String> channelNotification = Arrays.asList("email", "sms");
 
-            return true;
+            NotificacaoFraude notification = NotificacaoFraude.builder()
+                    .transacaoId(transactionId)
+                    .tipoBiometria(tipoBiometria)
+                    .tipoFraude(tipoFraude)
+                    .dataCaptura(LocalDateTime.now())
+                    .dispositivo(dispositivo)
+                    .canalNotificacao(channelNotification)
+                    .notificadoPor("sistema-biometria")
+                    .metadados(metadados != null ? metadados : createDefaultMetadata())
+                    .processada(false)
+                    .dataCriacao(LocalDateTime.now())
+                    .build();
+
+            notificationFraudRepository.save(notification);
+
+            System.out.println("FRAUDE DETECTADA: " + tipoFraude + " do tipo " + tipoBiometria
+                    + ", transação: " + transactionId);
+
+            return transactionId;
         } catch (Exception e) {
             System.err.println("Erro ao enviar notificação de fraude: " + e.getMessage());
-            return false;
+            return null;
         }
     }
 
-    /**
-     * Registra análise bem-sucedida de imagem
-     * @param userId ID do usuário
-     * @param imageUrl URL da imagem
-     * @param analysisResult Resultado da análise
-     */
-    public void logSuccessfulAnalysis(String userId, String imageUrl, String analysisResult) {
-        // Em produção, poderia enviar para sistema de auditoria ou monitoramento
-        System.out.println("ANÁLISE BEM-SUCEDIDA: Usuário " + userId + ", imagem: " + imageUrl);
+    public void registrarProcessamentoSucesso(String tipoBiometria, String referencia) {
+        System.out.println("PROCESSAMENTO BEM-SUCEDIDO: " + tipoBiometria + " - " + referencia);
+    }
+
+    private Map<String, Object> createDefaultMetadata() {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("latitude", -23.55052);
+        metadata.put("longitude", -46.633308);
+        metadata.put("ipOrigem", "127.0.0.1");
+        return metadata;
     }
 }

@@ -2,21 +2,20 @@ package com.fiap.challengefiapquod.domain.service;
 
 import com.fiap.challengefiapquod.application.dto.FraudAnalysisResultDTO;
 import com.fiap.challengefiapquod.application.dto.ImageAnalysisResultDTO;
+import com.fiap.challengefiapquod.domain.model.NotificacaoFraude;
+import com.fiap.challengefiapquod.domain.repository.NotificationFraudRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.Base64;
+import java.time.LocalDateTime;
+import java.util.*;
 
 @Service
+@RequiredArgsConstructor
 public class FraudDetectionService {
 
     private final ImageDescriptionService imageDescriptionService;
-    private final NotificationService notificationService;
-
-    public FraudDetectionService(ImageDescriptionService imageDescriptionService,
-                                 NotificationService notificationService) {
-        this.imageDescriptionService = imageDescriptionService;
-        this.notificationService = notificationService;
-    }
+    private final NotificationFraudRepository notificacaoFraudeRepository;
 
     public FraudAnalysisResultDTO analyzeImage(String imageUrl, String userId) {
         try {
@@ -24,11 +23,19 @@ public class FraudDetectionService {
 
             boolean isFraud = detectPossibleFraud(imageAnalysis);
             String fraudReason = isFraud ? determineFraudReason(imageAnalysis) : null;
+            String tipoFraude = convertToTipoFraude(fraudReason);
+
+            String analysisId = generateAnalysisId(userId, imageUrl);
 
             if (isFraud) {
-                notificationService.notifyFraudDetection(userId, imageUrl, fraudReason);
-            } else {
-                notificationService.logSuccessfulAnalysis(userId, imageUrl, imageAnalysis.getDescription());
+                NotificacaoFraude notificacao = criarNotificacaoFraude(
+                        analysisId,
+                        "facial",
+                        tipoFraude,
+                        imageUrl
+                );
+
+                notificacaoFraudeRepository.save(notificacao);
             }
 
             FraudAnalysisResultDTO result = new FraudAnalysisResultDTO();
@@ -40,13 +47,29 @@ public class FraudDetectionService {
             result.setImageWidth(imageAnalysis.getImageWidth());
             result.setImageHeight(imageAnalysis.getImageHeight());
             result.setImageType(imageAnalysis.getImageType());
-            result.setAnalysisId(generateAnalysisId(userId, imageUrl));
+            result.setAnalysisId(analysisId);
             result.setFaces(imageAnalysis.getFaces());
 
             return result;
 
         } catch (Exception e) {
             throw new RuntimeException("Erro ao analisar imagem para fraude: " + e.getMessage(), e);
+        }
+    }
+
+    private String convertToTipoFraude(String fraudReason) {
+        if (fraudReason == null) return null;
+
+        if (fraudReason.contains("Nenhum rosto")) {
+            return "sem_face";
+        } else if (fraudReason.contains("Múltiplos rostos")) {
+            return "multiplas_faces";
+        } else if (fraudReason.contains("rosto frontal")) {
+            return "face_nao_frontal";
+        } else if (fraudReason.contains("resolução")) {
+            return "baixa_qualidade";
+        } else {
+            return "deepfake";
         }
     }
 
@@ -109,5 +132,37 @@ public class FraudDetectionService {
     private String generateAnalysisId(String userId, String imageUrl) {
         String baseString = userId + ":" + imageUrl + ":" + System.currentTimeMillis();
         return Base64.getEncoder().encodeToString(baseString.getBytes()).substring(0, 20);
+    }
+
+    private NotificacaoFraude criarNotificacaoFraude(
+            String transacaoId,
+            String tipoBiometria,
+            String tipoFraude,
+            String imageUrl) {
+
+        NotificacaoFraude.DispositivoInfo dispositivo = NotificacaoFraude.DispositivoInfo.builder()
+                .fabricante("Desconhecido")
+                .modelo("Desconhecido")
+                .sistemaOperacional("Desconhecido")
+                .build();
+
+        Map<String, Object> metadados = new HashMap<>();
+        metadados.put("latitude", -23.55052);
+        metadados.put("longitude", -46.633308);
+        metadados.put("ipOrigem", "127.0.0.1");
+        metadados.put("imageUrl", imageUrl);
+
+        return NotificacaoFraude.builder()
+                .transacaoId(transacaoId)
+                .tipoBiometria(tipoBiometria)
+                .tipoFraude(tipoFraude)
+                .dataCaptura(LocalDateTime.now())
+                .dispositivo(dispositivo)
+                .canalNotificacao(Arrays.asList("sms", "email"))
+                .notificadoPor("sistema-analise-fraude")
+                .metadados(metadados)
+                .processada(false)
+                .dataCriacao(LocalDateTime.now())
+                .build();
     }
 }
