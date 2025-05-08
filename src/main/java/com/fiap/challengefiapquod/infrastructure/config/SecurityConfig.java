@@ -32,19 +32,14 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        // Rotas públicas
                         .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/demo/**").permitAll() // Endpoints de demonstração
-                        .requestMatchers("/api/images/description").permitAll() // Endpoint de descrição de imagem
-                        .requestMatchers(HttpMethod.GET, "/api/images/{id}").permitAll() // Acesso a imagens
-
-                        // Rotas protegidas
+                        .requestMatchers("/api/demo/**").permitAll() 
+                        .requestMatchers("/api/images/description").permitAll() 
+                        .requestMatchers(HttpMethod.GET, "/api/images/{id}").permitAll()
                         .requestMatchers("/api/secure/**").authenticated()
                         .requestMatchers("/api/images/upload").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/images").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/images/**").authenticated()
-
-                        // Qualquer outra requisição requer autenticação
                         .anyRequest().authenticated()
                 );
 
