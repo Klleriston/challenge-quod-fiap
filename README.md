@@ -188,7 +188,3 @@ src/main/java/com/fiap/challengefiapquod/
 3. O sistema analisa a imagem usando algoritmos de detecção de fraude
 4. Um resultado é retornado, indicando se a biometria é válida
 5. Em caso de fraude, uma notificação é registrada automaticamente
-
-## Licença
-
-Este projeto é propriedade de FIAP/QUOD. 
