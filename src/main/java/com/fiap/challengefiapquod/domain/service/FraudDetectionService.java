@@ -20,41 +20,52 @@ public class FraudDetectionService {
     public FraudAnalysisResultDTO analyzeImage(String imageUrl, String userId) {
         try {
             ImageAnalysisResultDTO imageAnalysis = imageDescriptionService.analyzeImageFromUrl(imageUrl);
-
-            boolean isFraud = detectPossibleFraud(imageAnalysis);
-            String fraudReason = isFraud ? determineFraudReason(imageAnalysis) : null;
-            String tipoFraude = convertToTipoFraude(fraudReason);
-
-            String analysisId = generateAnalysisId(userId, imageUrl);
-
-            if (isFraud) {
-                NotificacaoFraude notificacao = criarNotificacaoFraude(
-                        analysisId,
-                        "facial",
-                        tipoFraude,
-                        imageUrl
-                );
-
-                notificacaoFraudeRepository.save(notificacao);
-            }
-
-            FraudAnalysisResultDTO result = new FraudAnalysisResultDTO();
-            result.setImageDescription(imageAnalysis.getDescription());
-            result.setContainsFaces(imageAnalysis.isContainsFaces());
-            result.setFaceCount(imageAnalysis.getFaceCount());
-            result.setFraud(isFraud);
-            result.setFraudReason(fraudReason);
-            result.setImageWidth(imageAnalysis.getImageWidth());
-            result.setImageHeight(imageAnalysis.getImageHeight());
-            result.setImageType(imageAnalysis.getImageType());
-            result.setAnalysisId(analysisId);
-            result.setFaces(imageAnalysis.getFaces());
-
-            return result;
-
+            return processAnalysis(imageAnalysis, userId, imageUrl);
         } catch (Exception e) {
             throw new RuntimeException("Erro ao analisar imagem para fraude: " + e.getMessage(), e);
         }
+    }
+
+    public FraudAnalysisResultDTO analyzeImageBase64(String base64Data, String userId) {
+        try {
+            ImageAnalysisResultDTO imageAnalysis = imageDescriptionService.analyzeImageFromBase64(base64Data);
+            return processAnalysis(imageAnalysis, userId, "base64://" + base64Data.hashCode());
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao analisar imagem base64 para fraude: " + e.getMessage(), e);
+        }
+    }
+    
+    private FraudAnalysisResultDTO processAnalysis(ImageAnalysisResultDTO imageAnalysis, String userId, String imageSource) {
+        boolean isFraud = detectPossibleFraud(imageAnalysis);
+        String fraudReason = isFraud ? determineFraudReason(imageAnalysis) : null;
+        String tipoFraude = convertToTipoFraude(fraudReason);
+
+        String analysisId = generateAnalysisId(userId, imageSource);
+
+        if (isFraud) {
+            NotificacaoFraude notificacao = criarNotificacaoFraude(
+                    analysisId,
+                    "facial",
+                    tipoFraude,
+                    imageSource
+            );
+
+            notificacaoFraudeRepository.save(notificacao);
+        }
+
+        FraudAnalysisResultDTO result = new FraudAnalysisResultDTO();
+        result.setImageDescription(imageAnalysis.getDescription());
+        result.setContainsFaces(imageAnalysis.isContainsFaces());
+        result.setFaceCount(imageAnalysis.getFaceCount());
+        result.setFraud(isFraud);
+        result.setFraudReason(fraudReason);
+        result.setImageWidth(imageAnalysis.getImageWidth());
+        result.setImageHeight(imageAnalysis.getImageHeight());
+        result.setImageType(imageAnalysis.getImageType());
+        result.setAnalysisId(analysisId);
+        result.setFaces(imageAnalysis.getFaces());
+
+        return result;
     }
 
     private String convertToTipoFraude(String fraudReason) {

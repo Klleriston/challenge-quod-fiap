@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class BiometriaRequestDTO {
     private String imageUrl;
+    private String imageBase64;
     private DispositivoInfo dispositivo;
     private Localizacao localizacao;
 

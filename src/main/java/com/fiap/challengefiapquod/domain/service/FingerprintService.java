@@ -11,7 +11,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
-import java.util.*;
 
 @Service
 public class FingerprintService {
@@ -56,55 +55,37 @@ public class FingerprintService {
                 return false;
             }
 
-            if (image.width() < 100 || image.height() < 100) {
+            if (image.width() < 200 || image.height() < 200 || image.width() > 5000 || image.height() > 5000) {
                 return false;
             }
 
-           Mat processedImage = new Mat();
-            Imgproc.equalizeHist(image, processedImage);
+            Mat preprocessedImage = new Mat();
 
-            Mat binaryImage = new Mat();
-            Imgproc.threshold(processedImage, binaryImage, 0, 255, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU);
+            Imgproc.equalizeHist(image, preprocessedImage);
 
-            int whitePixels = Core.countNonZero(binaryImage);
-            int totalPixels = binaryImage.rows() * binaryImage.cols();
-            int blackPixels = totalPixels - whitePixels;
-
-            double blackRatio = (double) blackPixels / totalPixels;
-
-            if (blackRatio < 0.2 || blackRatio > 0.7) {
-                return false;
-            }
+            Imgproc.GaussianBlur(preprocessedImage, preprocessedImage, new Size(3, 3), 0);
 
             Mat edges = new Mat();
-            Imgproc.Canny(binaryImage, edges, 50, 150);
+            Imgproc.Canny(preprocessedImage, edges, 50, 150);
 
             Mat lines = new Mat();
-            Imgproc.HoughLines(edges, lines, 1, Math.PI/180, 100);
+            Imgproc.HoughLinesP(edges, lines, 1, Math.PI/180, 50, 30, 10);
 
-            if (lines.rows() < 20) {
+            if (lines.rows() < 10) {
                 return false;
             }
 
-            double[] angles = new double[lines.rows()];
-            for (int i = 0; i < lines.rows(); i++) {
-                double[] line = lines.get(i, 0);
-                angles[i] = line[1];
-            }
+            double[] lineAngles = extractLineOrientations(lines);
 
-            double angleVariance = calculateVariance(angles);
+            double angleVariance = calculateAngleVariance(lineAngles);
 
             if (angleVariance < 0.1) {
                 return false;
             }
 
-            Mat hierarchy = new Mat();
-            List<MatOfPoint> contours = new ArrayList<>();
-            Imgproc.findContours(edges, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+            double linesDensity = calculateLinesDensity(image, lines);
 
-            if (contours.size() < 50) return false;
-
-            return true;
+            return linesDensity > 0.1 && linesDensity < 0.7;
 
         } catch (Exception e) {
             System.err.println("Erro na validação da impressão digital: " + e.getMessage());
@@ -112,19 +93,56 @@ public class FingerprintService {
         }
     }
 
-    private double calculateVariance(double[] values) {
-        double sum = 0;
-        for (double value : values) {
-            sum += value;
+    private double[] extractLineOrientations(Mat lines) {
+        double[] angles = new double[lines.rows()];
+
+        for (int i = 0; i < lines.rows(); i++) {
+            double[] line = lines.get(i, 0);
+
+            double dx = line[2] - line[0];
+            double dy = line[3] - line[1];
+
+            double angle = Math.atan2(dy, dx);
+
+            angles[i] = Math.abs(angle);
         }
-        double mean = sum / values.length;
+
+        return angles;
+    }
+
+    private double calculateAngleVariance(double[] angles) {
+        if (angles.length == 0) return 0;
+        double sum = 0;
+        for (double angle : angles) {
+            sum += angle;
+        }
+        double mean = sum / angles.length;
 
         double squaredDifferenceSum = 0;
-        for (double value : values) {
-            squaredDifferenceSum += Math.pow(value - mean, 2);
+        for (double angle : angles) {
+            squaredDifferenceSum += Math.pow(angle - mean, 2);
         }
 
-        return squaredDifferenceSum / values.length;
+        return squaredDifferenceSum / angles.length;
+    }
+
+    private double calculateLinesDensity(Mat image, Mat lines) {
+        Mat linesMask = Mat.zeros(image.size(), CvType.CV_8UC1);
+
+        for (int i = 0; i < lines.rows(); i++) {
+            double[] line = lines.get(i, 0);
+            Imgproc.line(linesMask,
+                    new Point(line[0], line[1]),
+                    new Point(line[2], line[3]),
+                    new Scalar(255),
+                    2
+            );
+        }
+
+        int linePixels = Core.countNonZero(linesMask);
+        int totalPixels = image.rows() * image.cols();
+
+        return (double) linePixels / totalPixels;
     }
 
 }

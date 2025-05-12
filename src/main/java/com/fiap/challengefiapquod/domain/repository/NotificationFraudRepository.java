@@ -8,7 +8,5 @@ import java.util.List;
 
 @Repository
 public interface NotificationFraudRepository extends MongoRepository<NotificacaoFraude, String> {
-    List<NotificacaoFraude> findByTipoBiometria(String tipoBiometria);
-    List<NotificacaoFraude> findByProcessada(boolean processada);
     NotificacaoFraude findByTransacaoId(String transacaoId);
 }

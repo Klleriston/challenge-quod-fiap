@@ -8,5 +8,4 @@ import java.util.Optional;
 
 @Repository
 public interface DocumentRepository extends MongoRepository<Document, String> {
-    Optional<Document> findByCpfAndRg(String cpf, String rg);
 }

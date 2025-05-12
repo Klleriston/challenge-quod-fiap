@@ -22,9 +22,21 @@ public class BiometriaController {
             @RequestBody BiometriaRequestDTO request,
             Authentication authentication) {
         String userId = getUserId(authentication);
-
-        FraudAnalysisResultDTO fraudResult = fraudDetectionService.analyzeImage(
-                request.getImageUrl(), userId);
+        
+        FraudAnalysisResultDTO fraudResult;
+        if (request.getImageUrl() != null && !request.getImageUrl().isEmpty()) {
+            fraudResult = fraudDetectionService.analyzeImage(request.getImageUrl(), userId);
+        } else if (request.getImageBase64() != null && !request.getImageBase64().isEmpty()) {
+            fraudResult = fraudDetectionService.analyzeImageBase64(request.getImageBase64(), userId);
+        } else {
+            return ResponseEntity.badRequest().body(
+                BiometriaResponseDTO.builder()
+                    .transacaoId("ERRO")
+                    .valido(false)
+                    .mensagem("Requisição inválida: é necessário fornecer imageUrl ou imageBase64")
+                    .build()
+            );
+        }
 
         BiometriaResponseDTO response = BiometriaResponseDTO.builder()
                 .transacaoId(fraudResult.getAnalysisId())

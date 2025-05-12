@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 @Service
@@ -31,31 +32,64 @@ public class ImageDescriptionService {
     public ImageAnalysisResultDTO analyzeImageFromUrl(String imageUrl) {
         try {
             byte[] imageData = downloadImage(imageUrl);
-
-            Mat image = Imgcodecs.imdecode(new MatOfByte(imageData), Imgcodecs.IMREAD_COLOR);
-
-            if (image.empty()) {
-                throw new IllegalArgumentException("Não foi possível carregar a imagem da URL fornecida");
-            }
-
-            ImageAnalysisResultDTO result = new ImageAnalysisResultDTO();
-
-            result.setImageWidth(image.cols());
-            result.setImageHeight(image.rows());
-            result.setImageType(determineImageType(imageUrl));
-
-            List<FaceDescriptionDTO> faceDescriptions = detectFaces(image);
-            result.setFaces(faceDescriptions);
-            result.setFaceCount(faceDescriptions.size());
-            result.setContainsFaces(!faceDescriptions.isEmpty());
-
-            result.setDescription(generateImageDescription(image, faceDescriptions));
-
-            return result;
-
+            return analyzeImageData(imageData, determineImageType(imageUrl));
         } catch (Exception e) {
-            throw new RuntimeException("Erro ao analisar imagem: " + e.getMessage(), e);
+            throw new RuntimeException("Erro ao analisar imagem da URL: " + e.getMessage(), e);
         }
+    }
+
+    public ImageAnalysisResultDTO analyzeImageFromBase64(String base64Data) {
+        try {
+            String cleanedBase64 = base64Data;
+            if (base64Data.contains(",")) {
+                cleanedBase64 = base64Data.split(",")[1];
+            }
+            
+            byte[] imageData = Base64.getDecoder().decode(cleanedBase64);
+
+            String imageType = "Desconhecido";
+            if (base64Data.contains("data:image/")) {
+                String metadata = base64Data.split(",")[0];
+                if (metadata.contains("jpeg") || metadata.contains("jpg")) {
+                    imageType = "JPEG";
+                } else if (metadata.contains("png")) {
+                    imageType = "PNG";
+                } else if (metadata.contains("gif")) {
+                    imageType = "GIF";
+                } else if (metadata.contains("bmp")) {
+                    imageType = "BMP";
+                } else if (metadata.contains("webp")) {
+                    imageType = "WEBP";
+                }
+            }
+            
+            return analyzeImageData(imageData, imageType);
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao analisar imagem Base64: " + e.getMessage(), e);
+        }
+    }
+    
+    private ImageAnalysisResultDTO analyzeImageData(byte[] imageData, String imageType) {
+        Mat image = Imgcodecs.imdecode(new MatOfByte(imageData), Imgcodecs.IMREAD_COLOR);
+
+        if (image.empty()) {
+            throw new IllegalArgumentException("Não foi possível carregar a imagem");
+        }
+
+        ImageAnalysisResultDTO result = new ImageAnalysisResultDTO();
+
+        result.setImageWidth(image.cols());
+        result.setImageHeight(image.rows());
+        result.setImageType(imageType);
+
+        List<FaceDescriptionDTO> faceDescriptions = detectFaces(image);
+        result.setFaces(faceDescriptions);
+        result.setFaceCount(faceDescriptions.size());
+        result.setContainsFaces(!faceDescriptions.isEmpty());
+
+        result.setDescription(generateImageDescription(image, faceDescriptions));
+
+        return result;
     }
 
     private byte[] downloadImage(String imageUrl) throws Exception {

@@ -27,7 +27,21 @@ public class BiometriaFacialService implements BiometriaService {
     public BiometriaResponseDTO validarBiometria(BiometriaRequestDTO request, String userId) {
         try {
             String transactionId = UUID.randomUUID().toString();
-            ImageAnalysisResultDTO imageAnalysis = imageDescriptionService.analyzeImageFromUrl(request.getImageUrl());
+            ImageAnalysisResultDTO imageAnalysis;
+            
+            if (request.getImageUrl() != null && !request.getImageUrl().isEmpty()) {
+                imageAnalysis = imageDescriptionService.analyzeImageFromUrl(request.getImageUrl());
+            } else if (request.getImageBase64() != null && !request.getImageBase64().isEmpty()) {
+                imageAnalysis = imageDescriptionService.analyzeImageFromBase64(request.getImageBase64());
+            } else {
+                return BiometriaResponseDTO.builder()
+                    .transacaoId(transactionId)
+                    .valido(false)
+                    .mensagem("Requisição inválida")
+                    .statusDetalhado("É necessário fornecer imageUrl ou imageBase64")
+                    .build();
+            }
+            
             boolean isValid = imageAnalysis.isContainsFaces() && !imageAnalysis.isFraud();
 
             if (!isValid) {
@@ -73,60 +87,18 @@ public class BiometriaFacialService implements BiometriaService {
         return getStringObjectMap(request);
     }
 
-    private String convertNotificacaoToJson(NotificacaoFraude notificacao) {
-        if (notificacao == null) return "{}";
-
-        String dataCaptura = notificacao.getDataCaptura().format(
-                DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")
-        );
-
-        StringBuilder json = new StringBuilder();
-        json.append("{\n")
-                .append("  \"transacaoId\": \"").append(notificacao.getTransacaoId()).append("\",\n")
-                .append("  \"tipoBiometria\": \"").append(notificacao.getTipoBiometria()).append("\",\n")
-                .append("  \"tipoFraude\": \"").append(notificacao.getTipoFraude()).append("\",\n")
-                .append("  \"dataCaptura\": \"").append(dataCaptura).append("\",\n")
-                .append("  \"dispositivo\": {\n")
-                .append("    \"fabricante\": \"").append(notificacao.getDispositivo().getFabricante()).append("\",\n")
-                .append("    \"modelo\": \"").append(notificacao.getDispositivo().getModelo()).append("\",\n")
-                .append("    \"sistemaOperacional\": \"").append(notificacao.getDispositivo().getSistemaOperacional()).append("\"\n")
-                .append("  },\n")
-                .append("  \"canalNotificacao\": [\"").append(String.join("\", \"", notificacao.getCanalNotificacao())).append("\"],\n")
-                .append("  \"notificadoPor\": \"").append(notificacao.getNotificadoPor()).append("\",\n")
-                .append("  \"metadados\": ").append(convertMapToJson(notificacao.getMetadados())).append("\n")
-                .append("}");
-
-        return json.toString();
-    }
-
-    private String convertMapToJson(Map<String, Object> map) {
-        if (map == null || map.isEmpty()) return "{}";
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("{");
-
-        boolean first = true;
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            if (!first) {
-                sb.append(",");
+    private String convertNotificacaoToJson(NotificacaoFraude notification) {
+        try {
+            if (notification == null) {
+                return "Notificação não encontrada";
             }
-            first = false;
 
-            sb.append("\"").append(entry.getKey()).append("\":");
-
-            Object value = entry.getValue();
-            if (value instanceof String) {
-                sb.append("\"").append(value).append("\"");
-            } else if (value instanceof Number) {
-                sb.append(value);
-            } else if (value instanceof Boolean) {
-                sb.append(value);
-            } else {
-                sb.append("\"").append(value).append("\"");
-            }
+            return notification.getTransacaoId() + " - "
+                    + notification.getTipoBiometria() + " - "
+                    + notification.getTipoFraude() + " - "
+                    + notification.getDataCaptura().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        } catch (Exception e) {
+            return "Erro ao converter notificação: " + e.getMessage();
         }
-
-        sb.append("}");
-        return sb.toString();
     }
 }
