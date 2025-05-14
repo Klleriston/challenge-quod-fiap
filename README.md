@@ -1,4 +1,4 @@
-1# Challenge FIAP-QUOD - Sistema de Detecção de Fraudes Biométricas
+# Challenge FIAP-QUOD - Sistema de Detecção de Fraudes Biométricas
 
 ## Visão Geral
 
